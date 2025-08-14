@@ -1,10 +1,10 @@
 services:
   db:
-    container_name: NBA-Prediction-DB
-    image: postgres:14.1
+    container_name: NBAModelDB
+    image: postgres:latest
     environment:
-      POSTGRES_USER: adamcode
       POSTGRES_PASSWORD: password
+      POSTGRES_USER: adamcode
       PGDATA: /data/postgres
     volumes:
       - db:/data/postgres
@@ -17,6 +17,5 @@ services:
 networks:
   db:
     driver: bridge
-
 volumes:
   db:
