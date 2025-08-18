@@ -74,7 +74,7 @@ curl -X POST http://localhost:5001/predict \
   -H "Content-Type: application/json" \
   -d '{
     "team1_id": 1610612738,
-    "team2_id": 1610612747,
+    "team2_id": 1610612747,w
     "game_date": "2025-08-18"
   }'
 

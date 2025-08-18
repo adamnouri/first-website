@@ -163,6 +163,36 @@ def predict_batch():
         logger.error(f"Batch prediction error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/teams', methods=['GET'])
+def get_teams():
+    """Get all NBA teams for frontend dropdown"""
+    try:
+        teams_data = prediction_service._get_all_teams_from_api()
+        
+        # Convert to list format for frontend
+        teams_list = []
+        for nba_id, team_info in teams_data.items():
+            teams_list.append({
+                "nbaApiId": nba_id,
+                "name": team_info["name"],
+                "city": team_info["city"],
+                "abbreviation": team_info["abbreviation"],
+                "fullName": team_info["fullName"]
+            })
+        
+        # Sort by full name for better UX
+        teams_list.sort(key=lambda x: x["fullName"])
+        
+        return jsonify({
+            "teams": teams_list,
+            "count": len(teams_list),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Teams error: {str(e)}")
+        return jsonify({"error": "Failed to get teams"}), 500
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_ENV') == 'development'

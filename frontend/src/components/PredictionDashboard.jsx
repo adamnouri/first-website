@@ -21,8 +21,37 @@ const PredictionDashboard = () => {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [team1Id, setTeam1Id] = useState('1');
-  const [team2Id, setTeam2Id] = useState('2');
+  const [teams, setTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [team1Id, setTeam1Id] = useState('');
+  const [team2Id, setTeam2Id] = useState('');
+
+  // Load teams on component mount
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setTeamsLoading(true);
+        const response = await fetch('http://localhost:5001/teams');
+        if (response.ok) {
+          const data = await response.json();
+          setTeams(data.teams || []);
+          // Set default teams if available
+          if (data.teams && data.teams.length >= 2) {
+            setTeam1Id(data.teams[0].nbaApiId.toString());
+            setTeam2Id(data.teams[1].nbaApiId.toString());
+          }
+        } else {
+          console.error('Failed to fetch teams');
+        }
+      } catch (err) {
+        console.error('Error fetching teams:', err);
+      } finally {
+        setTeamsLoading(false);
+      }
+    };
+
+    fetchTeams();
+  }, []);
 
   const makePrediction = async () => {
     if (team1Id === team2Id) {
@@ -30,11 +59,16 @@ const PredictionDashboard = () => {
       return;
     }
 
+    if (!team1Id || !team2Id) {
+      setError('Please select both teams');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/predict', {
+      const response = await fetch('http://localhost:5001/predict', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,6 +91,11 @@ const PredictionDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to get team name by ID
+  const getTeamById = (teamId) => {
+    return teams.find(team => team.nbaApiId.toString() === teamId.toString());
   };
 
   const ConfidenceGauge = ({ confidence }) => {
@@ -100,30 +139,46 @@ const PredictionDashboard = () => {
 
       <div className="prediction-form">
         <div className="form-group">
-          <label htmlFor="team1">Team 1 ID:</label>
-          <input
-            type="number"
-            id="team1"
-            value={team1Id}
-            onChange={(e) => setTeam1Id(e.target.value)}
-            min="1"
-            max="30"
-          />
+          <label htmlFor="team1">Home Team:</label>
+          {teamsLoading ? (
+            <div className="loading-teams">Loading teams...</div>
+          ) : (
+            <select
+              id="team1"
+              value={team1Id}
+              onChange={(e) => setTeam1Id(e.target.value)}
+            >
+              <option value="">Select home team</option>
+              {teams.map((team) => (
+                <option key={team.nbaApiId} value={team.nbaApiId}>
+                  {team.fullName}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="form-group">
-          <label htmlFor="team2">Team 2 ID:</label>
-          <input
-            type="number"
-            id="team2"
-            value={team2Id}
-            onChange={(e) => setTeam2Id(e.target.value)}
-            min="1"
-            max="30"
-          />
+          <label htmlFor="team2">Away Team:</label>
+          {teamsLoading ? (
+            <div className="loading-teams">Loading teams...</div>
+          ) : (
+            <select
+              id="team2"
+              value={team2Id}
+              onChange={(e) => setTeam2Id(e.target.value)}
+            >
+              <option value="">Select away team</option>
+              {teams.map((team) => (
+                <option key={team.nbaApiId} value={team.nbaApiId}>
+                  {team.fullName}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <button 
           onClick={makePrediction} 
-          disabled={loading}
+          disabled={loading || teamsLoading || !team1Id || !team2Id}
           className="predict-button"
         >
           {loading ? 'Predicting...' : 'Get Prediction'}
@@ -143,13 +198,24 @@ const PredictionDashboard = () => {
             <div className="summary-cards">
               <div className="summary-card winner">
                 <h3>Predicted Winner</h3>
-                <p>Team {prediction.winner_team_id}</p>
+                <p>
+                  {prediction.winner_team_name || `Team ${prediction.winner_team_id}`}
+                </p>
               </div>
               <div className="summary-card score">
                 <h3>Predicted Score</h3>
                 <p>
-                  Team {team1Id}: {prediction.team1_predicted_score} | 
-                  Team {team2Id}: {prediction.team2_predicted_score}
+                  {prediction.teams ? (
+                    <>
+                      {prediction.teams.home.name}: {prediction.team1_predicted_score} | {' '}
+                      {prediction.teams.away.name}: {prediction.team2_predicted_score}
+                    </>
+                  ) : (
+                    <>
+                      {getTeamById(team1Id)?.fullName || `Team ${team1Id}`}: {prediction.team1_predicted_score} | {' '}
+                      {getTeamById(team2Id)?.fullName || `Team ${team2Id}`}: {prediction.team2_predicted_score}
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -157,6 +223,22 @@ const PredictionDashboard = () => {
 
           <div className="confidence-section">
             <ConfidenceGauge confidence={prediction.confidence} />
+            {prediction.teams && (
+              <div className="matchup-display">
+                <h3>Matchup</h3>
+                <div className="teams-display">
+                  <div className="team home-team">
+                    <span className="team-name">{prediction.teams.home.name}</span>
+                    <span className="team-abbr">({prediction.teams.home.abbreviation})</span>
+                  </div>
+                  <span className="vs">VS</span>
+                  <div className="team away-team">
+                    <span className="team-name">{prediction.teams.away.name}</span>
+                    <span className="team-abbr">({prediction.teams.away.abbreviation})</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

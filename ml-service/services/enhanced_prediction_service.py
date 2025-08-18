@@ -219,8 +219,15 @@ class EnhancedNBAPredictionService:
                 home_score = base_score - score_variance // 2
                 away_score = base_score + score_variance
             
+            # Get team names
+            home_team_name = self._get_team_name_from_api(team1_id)
+            away_team_name = self._get_team_name_from_api(team2_id)
+            home_team_abbr = self._get_team_abbreviation_from_api(team1_id)
+            away_team_abbr = self._get_team_abbreviation_from_api(team2_id)
+            
             result = {
                 "winner_team_id": team1_id if home_win_prob > 0.5 else team2_id,
+                "winner_team_name": home_team_name if home_win_prob > 0.5 else away_team_name,
                 "confidence": round(confidence, 3),
                 "home_win_probability": round(home_win_prob, 3),
                 "away_win_probability": round(1 - home_win_prob, 3),
@@ -229,6 +236,18 @@ class EnhancedNBAPredictionService:
                 "prediction_date": datetime.now().isoformat(),
                 "model_version": "2.0_enhanced",
                 "models_used": list(predictions.keys()),
+                "teams": {
+                    "home": {
+                        "id": team1_id,
+                        "name": home_team_name,
+                        "abbreviation": home_team_abbr
+                    },
+                    "away": {
+                        "id": team2_id,
+                        "name": away_team_name,
+                        "abbreviation": away_team_abbr
+                    }
+                },
                 "team_ratings": {
                     "home": home_rating,
                     "away": away_rating,
@@ -345,6 +364,52 @@ class EnhancedNBAPredictionService:
         except Exception as e:
             logger.warning(f"Failed to get team stats from API: {e}")
             return self._get_default_team_stats()
+    
+    def _get_team_name_from_api(self, team_id: int) -> str:
+        """Get team name from Spring Boot API using NBA API ID"""
+        try:
+            response = requests.get(f"{self.spring_boot_url}/api/v1/teams/nba/{team_id}/name", timeout=5)
+            if response.status_code == 200:
+                return response.text.strip('"')  # Remove quotes from JSON string response
+            else:
+                return f"Team {team_id}"
+        except Exception as e:
+            logger.warning(f"Failed to get team name from API for team {team_id}: {e}")
+            return f"Team {team_id}"
+    
+    def _get_team_abbreviation_from_api(self, team_id: int) -> str:
+        """Get team abbreviation from Spring Boot API using NBA API ID"""
+        try:
+            response = requests.get(f"{self.spring_boot_url}/api/v1/teams/nba/{team_id}/abbreviation", timeout=5)
+            if response.status_code == 200:
+                return response.text.strip('"')
+            else:
+                return "UNK"
+        except Exception as e:
+            logger.warning(f"Failed to get team abbreviation from API for team {team_id}: {e}")
+            return "UNK"
+    
+    def _get_all_teams_from_api(self) -> Dict[int, Dict]:
+        """Get all team mappings from Spring Boot API"""
+        try:
+            response = requests.get(f"{self.spring_boot_url}/api/v1/teams/mappings", timeout=10)
+            if response.status_code == 200:
+                teams_data = response.json()
+                teams_map = {}
+                for team in teams_data:
+                    teams_map[team['nbaApiId']] = {
+                        'name': team['name'],
+                        'city': team['city'],
+                        'abbreviation': team['abbreviation'],
+                        'fullName': team['fullName']
+                    }
+                return teams_map
+            else:
+                logger.warning(f"Failed to get teams from API, status: {response.status_code}")
+                return {}
+        except Exception as e:
+            logger.warning(f"Failed to get all teams from API: {e}")
+            return {}
     
     def _get_default_team_stats(self) -> Dict:
         """Return default team stats"""

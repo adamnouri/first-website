@@ -1,12 +1,14 @@
 package com.better.nbamodel.controller;
 
 import com.better.nbamodel.entity.Team;
+import com.better.nbamodel.repository.TeamRepository;
 import com.better.nbamodel.service.TeamService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -74,6 +76,70 @@ public class TeamController {
         if (team.isPresent()) {
             teamService.deleteTeam(id);
             return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+    
+    // NBA API specific endpoints
+    @GetMapping("/nba/{nbaApiId}")
+    public ResponseEntity<Team> getTeamByNbaApiId(@PathVariable Long nbaApiId) {
+        Optional<Team> team = teamService.getTeamByNbaApiId(nbaApiId);
+        return team.map(ResponseEntity::ok)
+                  .orElse(ResponseEntity.notFound().build());
+    }
+    
+    @GetMapping("/abbreviation/{abbreviation}")
+    public ResponseEntity<Team> getTeamByAbbreviation(@PathVariable String abbreviation) {
+        Optional<Team> team = teamService.getTeamByAbbreviation(abbreviation);
+        return team.map(ResponseEntity::ok)
+                  .orElse(ResponseEntity.notFound().build());
+    }
+    
+    @GetMapping("/search")
+    public ResponseEntity<List<Team>> searchTeams(@RequestParam String name) {
+        List<Team> teams = teamService.searchTeamsByName(name);
+        return ResponseEntity.ok(teams);
+    }
+    
+    @GetMapping("/ordered")
+    public ResponseEntity<List<Team>> getTeamsOrderedByConferenceAndDivision() {
+        List<Team> teams = teamService.getAllTeamsOrderedByConferenceAndDivision();
+        return ResponseEntity.ok(teams);
+    }
+    
+    @GetMapping("/mappings")
+    public ResponseEntity<List<TeamRepository.TeamMapping>> getTeamMappings() {
+        List<TeamRepository.TeamMapping> mappings = teamService.getAllTeamMappings();
+        return ResponseEntity.ok(mappings);
+    }
+    
+    @GetMapping("/names-map")
+    public ResponseEntity<Map<Long, String>> getTeamNamesMap() {
+        Map<Long, String> namesMap = teamService.getTeamNamesMap();
+        return ResponseEntity.ok(namesMap);
+    }
+    
+    @GetMapping("/dropdown")
+    public ResponseEntity<List<TeamRepository.TeamMapping>> getTeamsForDropdown() {
+        List<TeamRepository.TeamMapping> teams = teamService.getAllTeamMappings();
+        return ResponseEntity.ok(teams);
+    }
+    
+    // Utility endpoints for ML service
+    @GetMapping("/nba/{nbaApiId}/name")
+    public ResponseEntity<String> getTeamNameByNbaApiId(@PathVariable Long nbaApiId) {
+        String teamName = teamService.getTeamNameByNbaApiId(nbaApiId);
+        if (!"Unknown Team".equals(teamName)) {
+            return ResponseEntity.ok(teamName);
+        }
+        return ResponseEntity.notFound().build();
+    }
+    
+    @GetMapping("/nba/{nbaApiId}/abbreviation")
+    public ResponseEntity<String> getTeamAbbreviationByNbaApiId(@PathVariable Long nbaApiId) {
+        String abbreviation = teamService.getTeamAbbreviationByNbaApiId(nbaApiId);
+        if (!"UNK".equals(abbreviation)) {
+            return ResponseEntity.ok(abbreviation);
         }
         return ResponseEntity.notFound().build();
     }
