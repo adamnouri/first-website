@@ -1,7 +1,56 @@
 package com.better.nbamodel.S3;
 
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.IOException;
 
 @Service
 public class S3Service {
+
+    private final S3Client s3;
+
+    public S3Service(S3Client s3) {
+        this.s3 = s3;
+    }
+
+
+    public void putObject(String bucketName, String key, byte[] file) {
+        PutObjectRequest objectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+        s3.putObject(objectRequest, RequestBody.fromBytes(file));
+    }
+    public byte[] getObject(String bucketName, String key) throws IOException {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+        return s3.getObject(getObjectRequest).readAllBytes();
+    }
+    public void deleteObject(String bucketName, String key) {
+        try {
+            s3.deleteObject(builder -> builder.bucket(bucketName).key(key));
+        } catch (AwsServiceException | SdkClientException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public boolean doesObjectExist(String bucketName, String key) {
+        try {
+            s3.headObject(builder -> builder.bucket(bucketName).key(key));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
 }
+
+
