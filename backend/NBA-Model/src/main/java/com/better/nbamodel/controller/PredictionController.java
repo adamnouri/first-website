@@ -20,7 +20,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/predictions")
-@CrossOrigin(origins = "*")
 public class PredictionController {
     
     private final PredictionService predictionService;

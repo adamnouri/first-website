@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class S3Service:
     def __init__(self):
-        self.bucket_name = os.getenv('AWS_S3_BUCKET_NAME', 'nba-predictions-bucket')
+        self.bucket_name = os.getenv('AWS_S3_BUCKET_NAME', 'my-nba-model-results')
         self.region = os.getenv('AWS_S3_REGION', 'us-east-2')
         self.predictions_folder = os.getenv('AWS_S3_PREDICTIONS_FOLDER', 'predictions/')
         self.analytics_folder = os.getenv('AWS_S3_ANALYTICS_FOLDER', 'analytics/')

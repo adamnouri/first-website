@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface PlayerRepository extends JpaRepository<Player, Long> {
+public interface  PlayerRepository extends JpaRepository<Player, Long> {
     List<Player> findByTeam(Team team);
     List<Player> findByPosition(String position);
     List<Player> findByNameContainingIgnoreCase(String name);
