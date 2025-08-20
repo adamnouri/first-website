@@ -4,8 +4,9 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import uuid
 
 # Import our services
 from services.enhanced_prediction_service import EnhancedNBAPredictionService as PredictionService
@@ -161,6 +162,133 @@ def predict_batch():
         
     except Exception as e:
         logger.error(f"Batch prediction error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/batch/generate-predictions', methods=['POST'])
+def generate_batch_predictions():
+    """Generate predictions for multiple matchups and store in S3"""
+    try:
+        data = request.get_json()
+        matchups = data.get('matchups', [])
+        
+        if not matchups:
+            return jsonify({"error": "No matchups provided"}), 400
+        
+        # Generate predictions with charts
+        batch_results = []
+        for matchup in matchups:
+            try:
+                prediction_uuid = str(uuid.uuid4())
+                team1_id = matchup['team1_id']
+                team2_id = matchup['team2_id']
+                game_date = datetime.strptime(matchup.get('game_date', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d').date()
+                
+                # Get prediction
+                prediction_result = prediction_service.predict_game(team1_id, team2_id, game_date.strftime('%Y-%m-%d'))
+                
+                # Get team names
+                teams_data = prediction_service._get_all_teams_from_api()
+                team1_name = teams_data.get(team1_id, {}).get('fullName', f'Team {team1_id}')
+                team2_name = teams_data.get(team2_id, {}).get('fullName', f'Team {team2_id}')
+                
+                # Generate chart image
+                chart_image = chart_service.generate_prediction_chart_image(prediction_result, team1_name, team2_name)
+                
+                # Prepare S3 prediction data
+                s3_prediction_data = {
+                    "prediction_id": prediction_uuid,
+                    "timestamp": datetime.now().isoformat(),
+                    "matchup": {
+                        "team1": {"id": team1_id, "name": team1_name},
+                        "team2": {"id": team2_id, "name": team2_name}
+                    },
+                    "prediction": prediction_result,
+                    "model_metadata": {
+                        "model_version": "v2.0_enhanced",
+                        "training_data_cutoff": datetime.now().strftime('%Y-%m-%d')
+                    }
+                }
+                
+                # Upload to S3
+                success, pred_path, chart_path = s3_service.upload_prediction_with_chart(
+                    prediction_uuid, game_date, s3_prediction_data, chart_image
+                )
+                
+                batch_results.append({
+                    "prediction_uuid": prediction_uuid,
+                    "team1_id": team1_id,
+                    "team2_id": team2_id,
+                    "team1_name": team1_name,
+                    "team2_name": team2_name,
+                    "game_date": game_date.isoformat(),
+                    "s3_success": success,
+                    "prediction_path": pred_path,
+                    "chart_path": chart_path,
+                    "prediction": prediction_result
+                })
+                
+            except Exception as e:
+                logger.error(f"Failed to process matchup {matchup}: {e}")
+                batch_results.append({
+                    "error": str(e),
+                    "matchup": matchup
+                })
+        
+        return jsonify({
+            "status": "completed",
+            "total_matchups": len(matchups),
+            "successful": sum(1 for r in batch_results if r.get('s3_success')),
+            "failed": sum(1 for r in batch_results if 'error' in r),
+            "results": batch_results,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Batch generation error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/batch/upcoming-games', methods=['POST'])  
+def generate_upcoming_games_predictions():
+    """Generate predictions for all upcoming games (next 7-14 days)"""
+    try:
+        days_ahead = request.json.get('days_ahead', 7) if request.is_json else 7
+        
+        # Mock upcoming games - in real implementation, fetch from NBA API
+        upcoming_games = []
+        teams_data = prediction_service._get_all_teams_from_api()
+        team_ids = list(teams_data.keys())
+        
+        # Generate sample matchups for next week
+        for day in range(1, days_ahead + 1):
+            game_date = datetime.now() + timedelta(days=day)
+            
+            # Create 3-5 random matchups per day
+            import random
+            num_games = random.randint(3, 5)
+            selected_teams = random.sample(team_ids, num_games * 2)
+            
+            for i in range(0, len(selected_teams), 2):
+                upcoming_games.append({
+                    "team1_id": selected_teams[i],
+                    "team2_id": selected_teams[i + 1],
+                    "game_date": game_date.strftime('%Y-%m-%d')
+                })
+        
+        # Generate predictions for all upcoming games
+        result = generate_batch_predictions()
+        
+        # Update the request data for the nested call
+        request.json = {"matchups": upcoming_games}
+        
+        return jsonify({
+            "message": f"Generated predictions for upcoming {days_ahead} days",
+            "total_games": len(upcoming_games),
+            "status": "processing",
+            "note": "Check /batch/generate-predictions endpoint for detailed results"
+        })
+        
+    except Exception as e:
+        logger.error(f"Upcoming games generation error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/teams', methods=['GET'])

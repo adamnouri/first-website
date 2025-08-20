@@ -1,6 +1,13 @@
 import logging
 from datetime import datetime, timedelta
 import random
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import numpy as np
+from io import BytesIO
+import seaborn as sns
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -243,3 +250,200 @@ class ChartService:
             "trend_analysis": {"type": "line", "data": {"labels": [], "datasets": []}},
             "win_probability": {"type": "doughnut", "data": {"labels": [], "datasets": []}}
         }
+    
+    def generate_prediction_chart_image(self, prediction_result: Dict[Any, Any], 
+                                      team1_name: str, team2_name: str) -> bytes:
+        """Generate a comprehensive prediction chart as PNG image for S3 storage"""
+        try:
+            # Set up the matplotlib style
+            plt.style.use('default')
+            sns.set_palette("husl")
+            
+            # Create figure with subplots
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+            fig.suptitle(f'NBA Game Prediction: {team1_name} vs {team2_name}', 
+                        fontsize=20, fontweight='bold', y=0.98)
+            
+            # 1. Score Comparison Bar Chart
+            self._create_score_comparison_chart(ax1, prediction_result, team1_name, team2_name)
+            
+            # 2. Confidence Gauge (simplified as bar)
+            self._create_confidence_chart(ax2, prediction_result)
+            
+            # 3. Team Stats Radar (simplified as bar chart)
+            self._create_team_stats_chart(ax3, team1_name, team2_name)
+            
+            # 4. Win Probability Pie Chart
+            self._create_win_probability_chart(ax4, prediction_result, team1_name, team2_name)
+            
+            # Adjust layout
+            plt.tight_layout()
+            plt.subplots_adjust(top=0.93)
+            
+            # Save to bytes
+            img_buffer = BytesIO()
+            plt.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
+            img_buffer.seek(0)
+            image_bytes = img_buffer.getvalue()
+            img_buffer.close()
+            
+            # Clean up
+            plt.close(fig)
+            
+            return image_bytes
+            
+        except Exception as e:
+            logger.error(f"Error generating prediction chart image: {e}")
+            return self._generate_error_chart_image()
+    
+    def _create_score_comparison_chart(self, ax, prediction_result, team1_name, team2_name):
+        """Create predicted score comparison bar chart"""
+        team1_score = prediction_result.get('team1_predicted_score', 105)
+        team2_score = prediction_result.get('team2_predicted_score', 105)
+        
+        teams = [team1_name, team2_name]
+        scores = [team1_score, team2_score]
+        colors = ['#3B82F6', '#EF4444']
+        
+        bars = ax.bar(teams, scores, color=colors, alpha=0.8)
+        ax.set_title('Predicted Final Scores', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Points', fontsize=12)
+        ax.set_ylim(80, 130)
+        
+        # Add score labels on bars
+        for bar, score in zip(bars, scores):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
+                   str(score), ha='center', va='bottom', fontweight='bold', fontsize=12)
+        
+        ax.grid(axis='y', alpha=0.3)
+    
+    def _create_confidence_chart(self, ax, prediction_result):
+        """Create confidence level visualization"""
+        confidence = prediction_result.get('confidence', 0.5) * 100
+        winner = prediction_result.get('predicted_winner', 'Team')
+        
+        # Create a horizontal bar chart
+        colors = ['#10B981' if confidence >= 75 else '#F59E0B' if confidence >= 60 else '#EF4444']
+        bars = ax.barh(['Confidence'], [confidence], color=colors, alpha=0.8)
+        
+        ax.set_title('Prediction Confidence', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Confidence Level (%)', fontsize=12)
+        ax.set_xlim(0, 100)
+        
+        # Add percentage label
+        ax.text(confidence + 2, 0, f'{confidence:.1f}%', 
+               va='center', ha='left', fontweight='bold', fontsize=12)
+        
+        # Add winner text
+        ax.text(50, -0.3, f'Predicted Winner: {winner}', 
+               ha='center', va='top', fontsize=11, style='italic')
+        
+        ax.grid(axis='x', alpha=0.3)
+    
+    def _create_team_stats_chart(self, ax, team1_name, team2_name):
+        """Create team statistics comparison"""
+        # Mock team stats
+        categories = ['Offense', 'Defense', 'Rebounding', '3-Point', 'FT%']
+        team1_stats = [random.randint(60, 95) for _ in range(5)]
+        team2_stats = [random.randint(60, 95) for _ in range(5)]
+        
+        x = np.arange(len(categories))
+        width = 0.35
+        
+        bars1 = ax.bar(x - width/2, team1_stats, width, label=team1_name, 
+                      color='#3B82F6', alpha=0.8)
+        bars2 = ax.bar(x + width/2, team2_stats, width, label=team2_name, 
+                      color='#EF4444', alpha=0.8)
+        
+        ax.set_title('Team Statistics Comparison', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Rating', fontsize=12)
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories, rotation=45, ha='right')
+        ax.legend()
+        ax.set_ylim(0, 100)
+        ax.grid(axis='y', alpha=0.3)
+    
+    def _create_win_probability_chart(self, ax, prediction_result, team1_name, team2_name):
+        """Create win probability pie chart"""
+        confidence = prediction_result.get('confidence', 0.5)
+        winner = prediction_result.get('predicted_winner', team1_name)
+        
+        if winner == team1_name:
+            team1_prob = confidence * 100
+            team2_prob = (1 - confidence) * 100
+        else:
+            team1_prob = (1 - confidence) * 100
+            team2_prob = confidence * 100
+        
+        sizes = [team1_prob, team2_prob]
+        labels = [f'{team1_name}\n{team1_prob:.1f}%', f'{team2_name}\n{team2_prob:.1f}%']
+        colors = ['#3B82F6', '#EF4444']
+        
+        wedges, texts, autotexts = ax.pie(sizes, labels=labels, colors=colors, 
+                                         autopct='', startangle=90, 
+                                         textprops={'fontsize': 10})
+        
+        ax.set_title('Win Probability', fontsize=14, fontweight='bold')
+        
+        # Highlight the favorite
+        if team1_prob > team2_prob:
+            wedges[0].set_edgecolor('black')
+            wedges[0].set_linewidth(2)
+        else:
+            wedges[1].set_edgecolor('black')
+            wedges[1].set_linewidth(2)
+    
+    def _generate_error_chart_image(self) -> bytes:
+        """Generate a simple error chart when main chart generation fails"""
+        try:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.text(0.5, 0.5, 'Chart Generation Error\nUsing Default View', 
+                   ha='center', va='center', fontsize=16, 
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightcoral"))
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            
+            img_buffer = BytesIO()
+            plt.savefig(img_buffer, format='PNG', dpi=150, bbox_inches='tight')
+            img_buffer.seek(0)
+            image_bytes = img_buffer.getvalue()
+            img_buffer.close()
+            plt.close(fig)
+            
+            return image_bytes
+        except Exception:
+            # Return minimal error image as bytes
+            return b'PNG_ERROR_PLACEHOLDER'
+    
+    def generate_batch_charts(self, predictions_data: list) -> dict:
+        """Generate multiple chart images for batch processing"""
+        chart_results = {}
+        
+        for prediction in predictions_data:
+            try:
+                prediction_uuid = prediction.get('prediction_uuid')
+                prediction_result = prediction.get('prediction_result', {})
+                team1_name = prediction.get('team1_name', 'Team 1')
+                team2_name = prediction.get('team2_name', 'Team 2')
+                
+                chart_image = self.generate_prediction_chart_image(
+                    prediction_result, team1_name, team2_name
+                )
+                
+                chart_results[prediction_uuid] = {
+                    'success': True,
+                    'image_bytes': chart_image,
+                    'size_kb': len(chart_image) / 1024
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to generate chart for {prediction.get('prediction_uuid')}: {e}")
+                chart_results[prediction.get('prediction_uuid')] = {
+                    'success': False,
+                    'error': str(e),
+                    'image_bytes': self._generate_error_chart_image()
+                }
+        
+        return chart_results

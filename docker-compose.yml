@@ -1,4 +1,5 @@
 services:
+  # PostgreSQL Database
   db:
     container_name: NBAModelDB
     image: postgres:latest
@@ -6,16 +7,101 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_USER: adamcode
       PGDATA: /data/postgres
+      POSTGRES_DB: nbamodeldb
     volumes:
       - db:/data/postgres
     ports:
       - "5332:5432"
     networks:
-      - db
+      - nba-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adamcode"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Spring Boot Backend
+  backend:
+    container_name: NBABackend
+    build: 
+      context: ./backend/NBA-Model
+      dockerfile: Dockerfile
+    environment:
+      - DB_USERNAME=adamcode
+      - DB_PASSWORD=password
+      - DB_URL=jdbc:postgresql://db:5432/nbamodeldb
+      - SPRING_PROFILES_ACTIVE=docker
+    ports:
+      - "8080:8080"
+    networks:
+      - nba-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/teams/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Flask ML Service
+  ml-service:
+    container_name: NBAMLService
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=production
+      - PORT=5001
+      - SPRING_BOOT_URL=http://backend:8080
+      - AWS_S3_BUCKET_NAME=my-nba-model-results
+      - AWS_S3_REGION=us-east-2
+      - AWS_S3_PREDICTIONS_FOLDER=predictions/
+      - AWS_S3_ANALYTICS_FOLDER=analytics/
+      - AWS_S3_BACKUPS_FOLDER=backups/
+    ports:
+      - "5001:5001"
+    networks:
+      - nba-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # React Frontend
+  frontend:
+    container_name: NBAFrontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - api_base_url=http://localhost:8080
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+      - VITE_ML_SERVICE_URL=http://localhost:5001
+    ports:
+      - "5173:5173"
+    networks:
+      - nba-network
+    depends_on:
+      - backend
+      - ml-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 networks:
-  db:
+  nba-network:
     driver: bridge
+
 volumes:
   db:
