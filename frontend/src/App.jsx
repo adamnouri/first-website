@@ -6,6 +6,7 @@ import PredictionPage from './pages/PredictionPage';
 import HistoryPage from './pages/HistoryPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import AboutPage from './pages/AboutPage';
+import PlayoffsPage from './pages/PlayoffsPage';
 import './styles/globals.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
             <Route path="/predictions" element={<PredictionPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/playoffs" element={<PlayoffsPage />} />
             <Route path="/about" element={<AboutPage />} />
           </Routes>
         </main>
