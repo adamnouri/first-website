@@ -5,6 +5,7 @@ import axios from 'axios';
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const ML_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL || 'http://localhost:5001';
 
+
 // Create axios instances
 export const apiClient = axios.create({
   baseURL: BASE_URL,

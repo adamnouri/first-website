@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { usePredictionHistory } from '../hooks/usePredictionHistory';
+import { useLocalStorageHistory } from '../hooks/useLocalStorageHistory';
 import { useTeams } from '../hooks/useTeams';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import PredictionChart from '../components/charts/PredictionChart';
+import { addSamplePredictions } from '../utils/sampleHistoryData';
 
 const HistoryPage = () => {
   const {
@@ -21,8 +22,10 @@ const HistoryPage = () => {
     clearFilters,
     refreshHistory,
     hasNextPage,
-    hasPreviousPage
-  } = usePredictionHistory();
+    hasPreviousPage,
+    clearAllHistory,
+    addPrediction
+  } = useLocalStorageHistory();
 
   const { teams } = useTeams();
   const [selectedPrediction, setSelectedPrediction] = useState(null);
@@ -56,6 +59,12 @@ const HistoryPage = () => {
         {isAccurate ? '✓ Accurate' : '✗ Inaccurate'}
       </span>
     );
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm('Are you sure you want to clear all prediction history? This cannot be undone.')) {
+      clearAllHistory();
+    }
   };
 
   const handleChartView = (prediction) => {
@@ -147,6 +156,11 @@ const HistoryPage = () => {
           <button onClick={refreshHistory} className="btn btn-primary">
             Refresh
           </button>
+          {totalElements > 0 && (
+            <button onClick={handleClearHistory} className="btn" style={{backgroundColor: 'var(--color-error)', color: 'white'}}>
+              Clear All History
+            </button>
+          )}
         </div>
       </div>
 
@@ -277,7 +291,7 @@ const HistoryPage = () => {
                     </td>
                     
                     <td className="actions-cell">
-                      {prediction.s3ChartPath && (
+                      {prediction.s3ChartPath ? (
                         <button
                           onClick={() => handleChartView(prediction)}
                           className="btn btn-sm chart-btn"
@@ -285,6 +299,8 @@ const HistoryPage = () => {
                         >
                           📊
                         </button>
+                      ) : (
+                        '-'
                       )}
                     </td>
                   </tr>
@@ -299,8 +315,20 @@ const HistoryPage = () => {
               <div className="empty-icon">📊</div>
               <h3 className="empty-title">No Predictions Found</h3>
               <p className="empty-description">
-                No predictions match your current filters. Try adjusting your search criteria.
+                {totalElements === 0 
+                  ? 'Start making predictions to see them here, or try the demo data below.'
+                  : 'No predictions match your current filters. Try adjusting your search criteria.'
+                }
               </p>
+              {totalElements === 0 && (
+                <button 
+                  onClick={() => addSamplePredictions(addPrediction)} 
+                  className="btn btn-primary"
+                  style={{ marginTop: '1rem' }}
+                >
+                  Add Demo Data
+                </button>
+              )}
             </div>
           )}
 

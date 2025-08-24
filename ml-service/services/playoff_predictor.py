@@ -205,17 +205,24 @@ class PlayoffPredictor:
             if standings is None:
                 standings = self.simulate_season_standings()
             
+            # Generate all rounds
+            play_in = self._create_play_in_tournament(standings)
+            first_round = self._create_first_round(standings)
+            conference_semifinals = self._create_conference_semifinals(first_round)
+            conference_finals = self._create_conference_finals(conference_semifinals)
+            nba_finals = self._create_nba_finals(conference_finals)
+            
             bracket = {
                 'generated_at': datetime.now().isoformat(),
-                'play_in': self._create_play_in_tournament(standings),
-                'first_round': self._create_first_round(standings),
-                'conference_semifinals': {},
-                'conference_finals': {},
-                'nba_finals': {},
+                'play_in': play_in,
+                'first_round': first_round,
+                'conference_semifinals': conference_semifinals,
+                'conference_finals': conference_finals,
+                'nba_finals': nba_finals,
                 'championship_odds': self._calculate_bracket_championship_odds(standings)
             }
             
-            logger.info("Generated complete playoff bracket")
+            logger.info("Generated complete playoff bracket with all rounds")
             return bracket
             
         except Exception as e:
@@ -366,6 +373,76 @@ class PlayoffPredictor:
         all_teams.sort(key=lambda x: x['championship_odds'], reverse=True)
         
         return all_teams
+    
+    def _create_conference_semifinals(self, first_round: Dict) -> Dict:
+        """Create conference semifinals matchups based on first round winners"""
+        semifinals = {'Eastern': [], 'Western': []}
+        
+        for conference, matchups in first_round.items():
+            if len(matchups) >= 4:
+                # Get winners from first round
+                winners = []
+                for matchup in matchups:
+                    winner = matchup['series_prediction']['predicted_winner']
+                    winners.append(winner)
+                
+                # Create semifinals matchups (1v4 winner vs 2v3 winner style)
+                if len(winners) >= 4:
+                    semifinal_matchups = [
+                        (winners[0], winners[3]),  # 1v8 winner vs 4v5 winner
+                        (winners[1], winners[2])   # 2v7 winner vs 3v6 winner
+                    ]
+                    
+                    for team1, team2 in semifinal_matchups:
+                        series_prediction = self._predict_series(team1, team2)
+                        
+                        semifinals[conference].append({
+                            'matchup': f"{team1['team_abbreviation']} vs {team2['team_abbreviation']}",
+                            'team1': team1,
+                            'team2': team2,
+                            'series_prediction': series_prediction
+                        })
+        
+        return semifinals
+    
+    def _create_conference_finals(self, conference_semifinals: Dict) -> Dict:
+        """Create conference finals matchups based on semifinals winners"""
+        conference_finals = {'Eastern': {}, 'Western': {}}
+        
+        for conference, matchups in conference_semifinals.items():
+            if len(matchups) >= 2:
+                # Get winners from semifinals
+                winner1 = matchups[0]['series_prediction']['predicted_winner']
+                winner2 = matchups[1]['series_prediction']['predicted_winner']
+                
+                series_prediction = self._predict_series(winner1, winner2)
+                
+                conference_finals[conference] = {
+                    'matchup': f"{winner1['team_abbreviation']} vs {winner2['team_abbreviation']}",
+                    'team1': winner1,
+                    'team2': winner2,
+                    'series_prediction': series_prediction
+                }
+        
+        return conference_finals
+    
+    def _create_nba_finals(self, conference_finals: Dict) -> Dict:
+        """Create NBA Finals matchup based on conference champions"""
+        if 'Eastern' in conference_finals and 'Western' in conference_finals:
+            eastern_champion = conference_finals['Eastern'].get('series_prediction', {}).get('predicted_winner')
+            western_champion = conference_finals['Western'].get('series_prediction', {}).get('predicted_winner')
+            
+            if eastern_champion and western_champion:
+                series_prediction = self._predict_series(eastern_champion, western_champion)
+                
+                return {
+                    'matchup': f"{eastern_champion['team_abbreviation']} vs {western_champion['team_abbreviation']}",
+                    'eastern_champion': eastern_champion,
+                    'western_champion': western_champion,
+                    'series_prediction': series_prediction
+                }
+        
+        return {}
     
     def _get_default_standings(self) -> Dict[str, List[Dict]]:
         """Return default standings if simulation fails"""

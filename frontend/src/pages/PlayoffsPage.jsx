@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePlayoffs } from '../hooks/usePlayoffs';
 import ChampionshipOdds from '../components/ChampionshipOdds';
 import ConferenceStandings from '../components/ConferenceStandings';
+import TournamentBracket from '../components/TournamentBracket';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 
@@ -173,68 +174,28 @@ const PlayoffsPage = () => {
               </button>
             </div>
             
-            {bracket ? (
-              <div className="bracket-container">
-                <div className="bracket-info">
-                  <p><strong>Generated:</strong> {new Date(bracket.generated_at).toLocaleString()}</p>
-                  <p><strong>Simulations:</strong> {simulations.toLocaleString()}</p>
+            <TournamentBracket 
+              bracket={bracket} 
+              simulations={simulations}
+            />
+            
+            {/* Additional bracket details below the visual bracket */}
+            {bracket && bracket.play_in && (
+              <div className="play-in-details">
+                <h3>Play-In Tournament Details</h3>
+                <div className="play-in-games">
+                  {Object.entries(bracket.play_in).map(([conference, games]) => (
+                    <div key={conference} className="conference-play-in">
+                      <h4>{conference} Conference</h4>
+                      {Object.entries(games).map(([gameKey, game]) => (
+                        <div key={gameKey} className="play-in-game">
+                          <div className="matchup">{game.matchup}</div>
+                          <div className="description">{game.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
-                
-                {/* Play-in Tournament */}
-                {bracket.play_in && (
-                  <div className="play-in-section">
-                    <h3>Play-In Tournament</h3>
-                    <div className="play-in-games">
-                      {Object.entries(bracket.play_in).map(([conference, games]) => (
-                        <div key={conference} className="conference-play-in">
-                          <h4>{conference} Conference</h4>
-                          {Object.entries(games).map(([gameKey, game]) => (
-                            <div key={gameKey} className="play-in-game">
-                              <div className="matchup">{game.matchup}</div>
-                              <div className="description">{game.description}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* First Round */}
-                {bracket.first_round && (
-                  <div className="first-round-section">
-                    <h3>First Round</h3>
-                    <div className="first-round-matchups">
-                      {Object.entries(bracket.first_round).map(([conference, matchups]) => (
-                        <div key={conference} className="conference-matchups">
-                          <h4>{conference} Conference</h4>
-                          {matchups.map((matchup, index) => (
-                            <div key={index} className="playoff-matchup">
-                              <div className="matchup-teams">{matchup.matchup}</div>
-                              {matchup.series_prediction && (
-                                <div className="series-prediction">
-                                  <div className="predicted-winner">
-                                    Predicted Winner: {matchup.series_prediction.predicted_winner?.team_abbreviation}
-                                  </div>
-                                  <div className="confidence">
-                                    Confidence: {(matchup.series_prediction.confidence * 100).toFixed(1)}%
-                                  </div>
-                                  <div className="predicted-games">
-                                    Games: {matchup.series_prediction.predicted_games}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="no-bracket">
-                <p>No playoff bracket data available. Click "Refresh Bracket" to generate predictions.</p>
               </div>
             )}
           </div>
